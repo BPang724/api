@@ -1,0 +1,53 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test, coverage, and type-checking artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# FastAPI / Uvicorn logs
+*.log
+logs/
+
+# PostgreSQL local data and backups
+pgdata/
+postgres-data/
+*.dump
+*.backup
+*.sql.gz
+
+# Alembic local configuration and generated cache
+alembic.ini.local
+
+# VS Code and IDE settings
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
