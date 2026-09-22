@@ -6,22 +6,22 @@
 
 | 週次 | 主題 | 產出 |
 |---|---|---|
-| W1 | FastAPI 專案架構與基礎 API | 可執行的 Hello API 專案骨架 |
-| W2 | PostgreSQL 安裝與連線 | 資料庫連線成功、建立第一個 table、加入API |
-| W3 | SQLAlchemy ORM + Alembic Migration | Model 定義與版本化的 schema |
-| W4 | CRUD API 完整實作 | 一組完整的 RESTful CRUD 端點 |
-| W5 | 關聯式設計（一對多、多對多） | 多資料表關聯查詢 |
-| W6 | 身份驗證（JWT / OAuth2） | 登入、保護路由 |
-| W7 | 測試（pytest） | 自動化測試覆蓋 CRUD + Auth |
-| W8 | 非同步與連線池 | Async ORM 操作、效能觀念 |
-| W9 | 進階查詢：分頁、篩選、搜尋 | Query 參數化的 API |
+| W01 | FastAPI 專案架構與基礎 API | 可執行的 Hello API 專案骨架 |
+| W02 | PostgreSQL 安裝與連線 | 資料庫連線成功、建立第一個 table、加入API |
+| W03 | SQLAlchemy ORM + Alembic Migration | Model 定義與版本化的 schema |
+| W04 | CRUD API 完整實作 | 一組完整的 RESTful CRUD 端點 |
+| W05 | 關聯式設計（一對多、多對多） | 多資料表關聯查詢 |
+| W06 | 身份驗證（JWT / OAuth2） | 登入、保護路由 |
+| W07 | 測試（pytest） | 自動化測試覆蓋 CRUD + Auth |
+| W08 | 非同步與連線池 | Async ORM 操作、效能觀念 |
+| W09 | 進階查詢：分頁、篩選、搜尋 | Query 參數化的 API |
 | W10 | 錯誤處理、Logging、Middleware | 具生產等級的錯誤回應與紀錄 |
 | W11 | Docker 化 | docker-compose 一鍵啟動 API + DB |
 | W12 | 部署與整合專題 | 完整可展示的後端專案 |
 
 ---
 
-## W1：FastAPI 專案架構與基礎 API
+## W01：FastAPI 專案架構與基礎 API
 
 ### 學習目標
 理解 FastAPI (Python) 的專案結構慣例，以及它跟 (Node.js) Express.js / Spring Boot 這類框架的對應關係。
@@ -126,7 +126,7 @@ git push -u origin main
 
 ---
 
-## W2：PostgreSQL 安裝與連線
+## W02：PostgreSQL 安裝與連線
 
 ### 學習目標
 在本機建立 PostgreSQL，並讓 Python 程式成功連線。
@@ -286,8 +286,9 @@ python .\app\core\db_test.py
 2. New REST api: /note/{id}
 
 ### 驗收標準
-- [ ] Python 程式能成功連上 PostgreSQL
-- [ ] 能說明為什麼密碼要放在 `.env` 而不是寫死在程式碼裡（對應你熟悉的環境變數管理概念）
+- [x] Python 程式能成功連上 PostgreSQL
+- [x] 能說明為什麼密碼要放在 `.env` 而不是寫死在程式碼裡（對應你熟悉的環境變數管理概念）
+    -因為放在程式碼中在git push時會一起被push上去，若有心人士看到則可對資料庫做修改，且放在.env中，若之後密碼有變更只需針對.env做修改，不用一個一個到程式碼中做修改
 - [ ] Test API and data format (了解Swagger用法，具備測試API能力)
 
 ### 心得
@@ -298,80 +299,32 @@ python .\app\core\db_test.py
 
 ---
 
-## W3：SQLAlchemy ORM + Alembic Migration
+## W03：Run FastAPI as Web App and API
 
 ### 學習目標
-用 ORM 定義資料模型，並用 Alembic 做版本化的 schema migration。
+用FastAPI做為http server，同時服務web app and api。
 
-### 為什麼這樣安排
-手寫 SQL 很直覺，但團隊協作時 schema 變更需要版本控管——這跟你熟悉的「資料庫 migration」概念（例如 Rails migration、Django migration、TypeORM migration）是同一件事。Alembic 是 SQLAlchemy 生態系的標準做法。
+root
+> Add run.bat to run fastapi with local_IP:7777
 
-### 操作步驟
-
-```bash
-pip install sqlalchemy alembic
-```
-
-`app/core/database.py`：
-```python
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-```
-
-`app/models/note.py`：
-```python
-from sqlalchemy import Column, Integer, String, DateTime, func
-from app.core.database import Base
-
-class Note(Base):
-    __tablename__ = "notes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
-    content = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-```
-
-**初始化 Alembic**
-```bash
-alembic init alembic
-```
-
-修改 `alembic/env.py`，讓它讀到你的 `Base` 與 `.env`：
-```python
-from app.core.database import Base
-from app.models.note import Note  # 讓 Alembic 偵測到 model
-target_metadata = Base.metadata
-```
-
-產生與套用 migration：
-```bash
-alembic revision --autogenerate -m "create notes table"
-alembic upgrade head
-```
-
-### 本週練習
-1. 新增一個 `User` model（`id`, `email`, `hashed_password`, `created_at`）
-2. 產生對應的 migration 並套用
-3. 修改 `Note` model，新增一個 `is_archived: bool` 欄位，再產生一次 migration，觀察 Alembic 如何偵測差異
+app\main.py
+> Make fastapi to be a http server with a folder as the root.
+- Set public_directory to your webui
+- 仔細測試觀察是否有問題？
+> Make all api paths correspond to /api/
+- 仔細測試觀察是否有問題？
+> #sym:StaticFiles: restrict public access to .html and .css only.
+- 注意Browser HTTP cache問題
+> 另開無痕測試就好了，why? 以後如何注意此問題
+- F12 > Network > Disable Cache
 
 ### 驗收標準
-- [ ] `alembic upgrade head` 能成功套用所有 migration
-- [ ] 能說明「為什麼不要直接手改資料庫 schema，而要透過 migration 檔案」
+- [x] local IP可存取
+- [x] 上課與TA設定 https://demo.wke.csie.ncnu.edu.tw/studentno 可存取
+- [x] 盡量測試，列出問題討論solutions
+    - 網頁可透過Ctrl+F5強制重整
+### 心得
+- 
 
 ---
 
