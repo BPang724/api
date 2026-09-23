@@ -1,15 +1,18 @@
-from fastapi import FastAPI
-
-app = FastAPI(title="My Backend API")
-
-import os
 from pathlib import Path
 from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-app = FastAPI()
+app = FastAPI(
+    title="My Backend API",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+    root_path="/s115321529",
+)
 api_router = APIRouter(prefix="/api")
+
+app.include_router(api_router)
 
 # 取得 main.py 的路徑，並往上退三層找到專案根目錄，再指向 webui
 # main.py -> app/ -> api/ -> 專案根目錄 -> webui
@@ -31,5 +34,3 @@ def health_check():
 @api_router.get("/version")
 def version_check():
     return {"version": "0.1.0"}
-
-app.include_router(api_router)
