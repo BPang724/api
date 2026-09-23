@@ -323,8 +323,9 @@ app\main.py
 - [x] 上課與TA設定 https://demo.wke.csie.ncnu.edu.tw/studentno 可存取
 - [x] 盡量測試，列出問題討論solutions
     - 網頁可透過Ctrl+F5強制重整
+    - 網站response status 404但後端terminal顯示200 OK，因為copilot修改路徑後仍忘記加root_path進main.py中
 ### 心得
-- 
+- 在VScode中使用copilot AI coding即便給出完整錯誤訊息也不一定能完整解決問題，有時搭配截圖訊息給AI效果更好
 
 ---
 
