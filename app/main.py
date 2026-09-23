@@ -19,7 +19,13 @@ app.include_router(api_router)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 webui_dir = BASE_DIR / "webui"
 
-# 掛載靜態資源與首頁
+# 明確提供 CSS，確保首頁使用的靜態路徑能找到同層檔案
+@app.get("/static/style.css")
+async def serve_stylesheet():
+    return FileResponse(webui_dir / "style.css", media_type="text/css")
+
+
+# 掛載其他靜態資源
 app.mount("/static", StaticFiles(directory=str(webui_dir)), name="static")
 
 @app.get("/")
