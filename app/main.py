@@ -1,7 +1,7 @@
 from pathlib import Path
 from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from routers.notes import router as notes_router
 
 app = FastAPI(
@@ -21,18 +21,26 @@ app.include_router(api_router)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 webui_dir = BASE_DIR / "webui"
 
-# 明確提供 CSS，確保首頁使用的靜態路徑能找到同層檔案
-@app.get("/static/style.css")
-async def serve_stylesheet():
-    return FileResponse(webui_dir / "style.css", media_type="text/css")
+
+class HtmlCssOnlyStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        if Path(path).suffix.lower() not in {".html", ".css"}:
+            return PlainTextResponse("Not Found", status_code=404)
+        return await super().get_response(path, scope)
 
 
-# 掛載其他靜態資源
-app.mount("/static", StaticFiles(directory=str(webui_dir)), name="static")
+# # 明確提供 CSS，確保首頁使用的靜態路徑能找到同層檔案
+# @app.get("/static/style.css")
+# async def serve_stylesheet():
+#     return FileResponse(webui_dir / "style.css", media_type="text/css")
 
 @app.get("/")
 async def serve_index():
     return FileResponse(webui_dir / "index.html")
+
+
+# 掛載其他靜態資源，並限制只提供 HTML 和 CSS
+app.mount("/static", HtmlCssOnlyStaticFiles(directory=str(webui_dir)), name="static")
 
 
 @api_router.get("/health")
