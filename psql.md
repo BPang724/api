@@ -329,83 +329,209 @@ app\main.py
 
 ---
 
-## W4：CRUD API 完整實作
+## W04：CRUD API 完整實作
+
+### RESTful API
+
+RESTful API 是一種以「資源（resource）」為中心設計 HTTP API 的方式。每一種資源都有固定的 URL，例如 `/notes` 代表筆記集合，`/notes/{id}` 代表某一筆筆記；用不同的 HTTP method 表達對資源的操作，而不是為每個動作建立不同的動詞型 URL。
+
+CRUD 分別代表 **Create（新增）**、**Read（查詢）**、**Update（更新）**、**Delete（刪除）**。以下以 `notes` 資源為例：
+
+| CRUD | HTTP method | 範例路徑 | 使用時機 | 請求／回應範例 |
+|---|---|---|---|---|
+| Create | `POST` | `/notes` | 建立一筆新資源，由伺服器產生 `id` | 請求：`{"title": "學習 REST", "content": "理解 CRUD"}`<br>回應：`201 Created` 與建立後的 note |
+| Read（列表） | `GET` | `/notes` | 取得資源集合，可搭配分頁、篩選或搜尋 | 回應：`200 OK` 與 notes 陣列 |
+| Read（單筆） | `GET` | `/notes/{id}` | 取得指定 `id` 的資源 | 回應：`200 OK` 與單筆 note；不存在時回傳 `404 Not Found` |
+| Update | `PUT` | `/notes/{id}` | 以完整資料取代指定資源 | 請求：`{"title": "更新標題", "content": "更新內容"}`<br>回應：`200 OK` 與更新後的 note |
+| Delete | `DELETE` | `/notes/{id}` | 刪除指定資源 | 回應：`204 No Content`；不存在時回傳 `404 Not Found` |
+
+設計 API 時，路徑通常使用名詞而不是動詞，例如使用 `POST /notes`，而不是 `/createNote`。同一個 HTTP method 與 URL 應具有一致且可預期的語意，讓前端、其他服務與 API 文件都容易理解與使用。
+
 
 ### 學習目標
-串接 W1 的 API 層與 W3 的資料層，完成一組完整 RESTful CRUD。
+串接API與資料庫，完成一組完整 RESTful CRUD。
 
 ### 為什麼這樣安排
 這是第一個「垂直切片」（vertical slice）——從 HTTP 請求到資料庫的完整路徑打通，之後每一週都是在這個路徑上疊加功能，而不是零散學習。
 
-### 操作步驟
+### AI coding
+> 針對/api/note 加入REST CRUD功能 (需對應慣用HTTP Method)
+- 仔細觀察修改的程式碼，另開瀏覽器詢問AI以求理解
+- 撰寫學習心得
+
+### 人工操作步驟
+
+#### 分層設計理念：routers → schemas → repositories → core
+
+將 API 拆成不同層次，是為了讓每個檔案只負責一種工作，降低修改時彼此影響的範圍。一次請求大致會依照以下流程處理：
+
+1. **Routers（路由層）**：決定 API 的 URL、HTTP method 與回應狀態，接收請求後呼叫下一層，不直接撰寫大量 SQL 或資料庫連線細節。
+2. **Schemas（資料格式層）**：使用 Pydantic 定義請求與回應格式，負責型別驗證、欄位限制，以及避免把資料庫內部欄位直接暴露給前端。
+3. **Repositories（資料存取層）**：集中處理 SQL 與資料庫 CRUD，讓 Router 不需要知道資料表查詢的細節。
+4. **Core（共用基礎設施層）**：提供資料庫連線、設定、驗證或其他全域共用功能；例如 `core/db.py` 管理 PostgreSQL 連線。
+
+因此，實際的責任關係可以理解為：
+
+```text
+HTTP request
+    → routers/notes.py       路由與流程控制
+    → schemas/notes.py        請求資料驗證
+    → repositories/notes.py  SQL 與資料存取
+    → core/db.py              PostgreSQL 連線
+    → HTTP response
+```
+
+相關檔案的使用方式如下：
+
+| 元件 | 目前專案檔案 | 主要用途 |
+|---|---|---|
+| Router | `app/routers/notes.py` | 定義 `/api/notes` 等端點，處理 HTTP 請求與回應 |
+| Schema | `app/schemas/notes.py` | 定義 `NoteCreate`、`NoteResponse` 等輸入輸出模型 |
+| Repository | `app/repositories/notes.py` | 封裝 notes 的 SQL 查詢、新增、更新與刪除 |
+| Core | `app/core/db.py` | 建立與管理 PostgreSQL 資料庫連線 |
+| Core | `app/core/static_files.py` | 集中處理前端靜態檔案的提供方式 |
+| Application entrypoint | `app/main.py` | 建立 FastAPI app、註冊 Router 與設定整體服務 |
+
+這種分層方式的重點不是檔案越多越好，而是讓變更容易定位：API 路徑改動主要看 Router，資料格式改動看 Schema，SQL 改動看 Repository，資料庫連線設定則集中在 Core。
+
+#### ORM 技術概念
+
+ORM（Object-Relational Mapping，物件關聯式對映）是把 Python 物件與關聯式資料庫的資料表對應起來的技術。開發者可以操作 `Note` 這類 Python model，ORM 再將操作轉換成 PostgreSQL 能理解的 SQL。
+
+簡單對照如下：
+
+| ORM 概念 | Python / SQLAlchemy 範例 | 資料庫概念 |
+|---|---|---|
+| Model class | `class Note` | `notes` 資料表 |
+| Object attribute | `note.title` | `title` 欄位 |
+| Object instance | `note = Note(...)` | 一筆資料（row） |
+| Query | `db.query(Note).filter(...)` | `SELECT ... WHERE ...` |
+| `db.add()` | 將物件加入 Session | 準備新增一筆資料 |
+| `db.commit()` | 提交 Session 的變更 | 真正寫入資料庫 |
+
+例如，以下 ORM 查詢：
+
+```python
+note = db.query(Note).filter(Note.id == note_id).first()
+```
+
+概念上相當於：
+
+```sql
+SELECT * FROM notes WHERE id = :note_id LIMIT 1;
+```
+
+其中 `db` 通常是 SQLAlchemy 的 `Session`。Session 可以理解成一次資料庫操作的工作範圍，負責追蹤物件變更、送出查詢，以及透過 `commit()` 確認交易。若發生錯誤，也可以使用 `rollback()` 撤銷尚未提交的變更。
+
+使用 ORM 的好處是可以用 Python model 與型別來表達資料操作，減少手寫 SQL 的數量，並集中處理交易與資料庫連線；但仍然需要理解 SQL，因為 ORM 最後仍會產生 SQL，複雜查詢也可能需要直接使用 SQLAlchemy 的查詢語法。
+
+本節為了讓 CRUD 流程集中，先在 Router 中直接示範 ORM 操作。實際專案可將 `db.query()`、`db.add()` 等資料庫操作移到 `app/repositories/notes.py`，讓 Router 只負責接收請求、呼叫 Repository 與回傳結果。
 
 `app/schemas/note.py`（Pydantic schema，區分「API 輸入輸出」與「資料庫 model」是重要慣例）：
 ```python
+# Schema 只描述 API 收到與回傳的資料格式，不負責執行 SQL。
+# import 是匯入其他套件或模組，讓目前檔案可以使用其中的類別與函式。
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 
+# POST /notes 使用的請求格式；content 可省略。
+# class 用來定義一個可重複使用的資料結構或物件類別。
 class NoteCreate(BaseModel):
+    # 冒號後的 str 是型別註記，表示 title 預期是一段文字。
     title: str
+    # Optional[str] 表示可以是文字或 None；= None 表示預設值是 None。
     content: Optional[str] = None
 
+# API 回應格式；不直接暴露資料庫 model 給前端。
 class NoteResponse(BaseModel):
+    # Pydantic 會依照這些型別註記檢查與轉換資料。
     id: int
     title: str
     content: Optional[str]
     created_at: datetime
 
+    # 允許 Pydantic 從 ORM model 的屬性建立回應資料。
+    # 內嵌 class Config 是設定這個 Pydantic model 行為的舊版寫法。
     class Config:
+        # ORM 物件像 note.title；一般字典則像 {"title": "學習 REST"}。
+        # True 允許 Pydantic 讀取 ORM 物件的屬性，轉成 NoteResponse。
+        # 若沒有這項設定，通常只能從字典鍵值建立，例如 NoteResponse(**data)。
         from_attributes = True
 ```
 
 `app/api/notes.py`：
 ```python
+# Router 負責 HTTP 路由與流程控制；資料庫細節可再委派給 repository。
+# APIRouter 是 FastAPI 用來集中管理一組相關 API 路由的類別。
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.note import Note
 from app.schemas.note import NoteCreate, NoteResponse
 
+# 同一組 notes 資源共用路徑前綴與 OpenAPI 分類。
+# 關鍵字參數使用 name=value，讓設定的意義比位置順序更清楚。
 router = APIRouter(prefix="/notes", tags=["notes"])
 
+# Create：先由 NoteCreate 驗證請求，再建立資料庫 model。
+# @ 是 decorator 語法：把函式註冊成指定 HTTP method 與路徑的 API endpoint。
+# response_model 會驗證並限制回傳給前端的欄位格式。
 @router.post("/", response_model=NoteResponse)
+# note: NoteCreate 是請求 body，db 由 FastAPI 依賴注入，不需手動建立連線。
 def create_note(note: NoteCreate, db: Session = Depends(get_db)):
+    # ** 會把字典的 key/value 展開成函式或類別建構子的關鍵字參數。
     db_note = Note(**note.model_dump())
+    # model_dump() 將 Pydantic model 轉成一般 Python 字典。
     db.add(db_note)
+    # add、commit、refresh 是 ORM 常見的新增、提交、重新讀取資料流程。
     db.commit()
     db.refresh(db_note)
     return db_note
 
+# Read：回傳所有 notes，response_model 會統一輸出格式。
+# list[NoteResponse] 表示回應是一個由 NoteResponse 組成的列表。
 @router.get("/", response_model=list[NoteResponse])
+# Depends(get_db) 表示呼叫 endpoint 時，由 FastAPI 執行 get_db 並傳入結果。
 def list_notes(db: Session = Depends(get_db)):
+    # .all() 將查詢結果全部取回；資料量大時應搭配分頁。
     return db.query(Note).all()
 
+# Read：依照 note_id 查詢單筆資源。
 @router.get("/{note_id}", response_model=NoteResponse)
 def get_note(note_id: int, db: Session = Depends(get_db)):
+    # .filter() 加入查詢條件，== 是建立 SQL 條件，不是立即比較 Python 值。
     note = db.query(Note).filter(Note.id == note_id).first()
+    # if not 可檢查查詢結果是否為 None 或其他「沒有資料」的狀態。
     if not note:
+        # HTTPException 會讓 FastAPI 回傳指定的 HTTP 錯誤狀態與訊息。
         raise HTTPException(status_code=404, detail="Note not found")
     return note
 
+# Update：以 NoteCreate 的完整資料更新指定資源。
 @router.put("/{note_id}", response_model=NoteResponse)
 def update_note(note_id: int, note_data: NoteCreate, db: Session = Depends(get_db)):
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    # for 逐一處理字典內容；key 是欄位名稱，value 是要寫入的新值。
     for key, value in note_data.model_dump().items():
+        # setattr(obj, name, value) 依欄位名稱動態設定物件屬性。
         setattr(note, key, value)
     db.commit()
     db.refresh(note)
     return note
 
+# Delete：找不到資源時回傳 404，避免讓呼叫端誤以為刪除成功。
 @router.delete("/{note_id}")
 def delete_note(note_id: int, db: Session = Depends(get_db)):
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
+    # delete 標記 ORM 物件待刪除，commit 後才會真正寫入資料庫。
     db.delete(note)
     db.commit()
+    # return 的字典會被 FastAPI 自動序列化成 JSON 回應。
     return {"detail": "deleted"}
 ```
 
@@ -416,13 +542,16 @@ app.include_router(notes.router)
 ```
 
 ### 本週練習
-1. 為 `User` 也做一組完整 CRUD
+1. 為 `User` 或個人專案會用到的資料表，也做一組完整 CRUD
 2. 思考並實作：`DELETE` 時如果 note 不存在，回傳的狀態碼與錯誤訊息是否符合 REST 慣例
 3. 用 `/docs` 的 Swagger UI 手動測試所有端點
 
 ### 驗收標準
 - [ ] 五個 CRUD 端點全部正常運作
-- [ ] 錯誤情境（找不到資源）回傳正確的 HTTP 狀態碼
+- [x] 錯誤情境（找不到資源）回傳正確的 HTTP 狀態碼
+
+### 學習心得
+- 
 
 ---
 

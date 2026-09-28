@@ -2,6 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from routers.notes import router as notes_router
 
 app = FastAPI(
     title="My Backend API",
@@ -12,6 +13,7 @@ app = FastAPI(
 )
 api_router = APIRouter(prefix="/api")
 
+api_router.include_router(notes_router)
 app.include_router(api_router)
 
 # 取得 main.py 的路徑，並往上退三層找到專案根目錄，再指向 webui
