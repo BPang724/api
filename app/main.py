@@ -29,10 +29,10 @@ class HtmlCssOnlyStaticFiles(StaticFiles):
         return await super().get_response(path, scope)
 
 
-# # 明確提供 CSS，確保首頁使用的靜態路徑能找到同層檔案
-# @app.get("/static/style.css")
-# async def serve_stylesheet():
-#     return FileResponse(webui_dir / "style.css", media_type="text/css")
+# 明確提供 CSS，確保首頁使用的靜態路徑能找到同層檔案
+@app.get("/static/style.css")
+async def serve_stylesheet():
+    return FileResponse(webui_dir / "style.css", media_type="text/css")
 
 @app.get("/")
 async def serve_index():
