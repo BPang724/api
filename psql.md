@@ -6,18 +6,18 @@
 
 | 週次 | 主題 | 產出 |
 |---|---|---|
-| W01 | FastAPI 專案架構與基礎 API | 可執行的 Hello API 專案骨架 |
-| W02 | PostgreSQL 安裝與連線 | 資料庫連線成功、建立第一個 table、加入API |
-| W03 | SQLAlchemy ORM + Alembic Migration | Model 定義與版本化的 schema |
-| W04 | CRUD API 完整實作 | 一組完整的 RESTful CRUD 端點 |
-| W05 | 關聯式設計（一對多、多對多） | 多資料表關聯查詢 |
-| W06 | 身份驗證（JWT / OAuth2） | 登入、保護路由 |
-| W07 | 測試（pytest） | 自動化測試覆蓋 CRUD + Auth |
-| W08 | 非同步與連線池 | Async ORM 操作、效能觀念 |
-| W09 | 進階查詢：分頁、篩選、搜尋 | Query 參數化的 API |
-| W10 | 錯誤處理、Logging、Middleware | 具生產等級的錯誤回應與紀錄 |
-| W11 | Docker 化 | docker-compose 一鍵啟動 API + DB |
-| W12 | 部署與整合專題 | 完整可展示的後端專案 |
+| W01 | [FastAPI 專案架構與基礎 API](#FastAPI) | 可執行的 Hello API 專案骨架 |
+| W02 | [PostgreSQL 安裝與連線](#PGSQL) | 資料庫連線成功、建立第一個 Table、加入API |
+| W03 | [Run FastAPI as Web App and API](#WebAppAPI) | https public單一服務完成 |
+| W04 | [CRUD API 完整實作](#CRUD) | 一組完整的 RESTful CRUD 端點 |
+| W05 | [關聯式設計：view](#DbView) | 多資料表關聯查詢 |
+| W06 | [身份驗證（JWT / OAuth2）](#OAuth) | 登入、保護路由 |
+| W07 | [測試（pytest）](#pytest) | 自動化測試覆蓋 CRUD + Auth |
+| W08 | [非同步與連線池](#pools) | Async ORM 操作、效能觀念 |
+| W09 | [進階查詢：分頁、篩選、搜尋](#paging) | Query 參數化的 API |
+| W10 | [錯誤處理、Logging、Middleware](#logging) | 具生產等級的錯誤回應與紀錄 |
+| W11 | [Docker 化](#Docker) | docker-compose 一鍵啟動 API + DB |
+| W12 | [部署與整合專題](#deploy) | 完整可展示的後端專案 |
 
 ---
 
@@ -555,15 +555,12 @@ app.include_router(notes.router)
 
 ---
 
-## W5：關聯式設計（一對多、多對多）
+## W05：關聯式設計：view {#DbView}
 
 ### 學習目標
-用 SQLAlchemy 的 relationship 處理跨表關聯，並理解 N+1 查詢問題。
+雖然用 SQLAlchemy 的 relationship 可以處理跨表關聯，但大量API需求可以在後端DB處理即可。例如：用 `create view` 對應大量SQL JOIN查詢，降低過多SQL寫在Python codes的需求。
 
-### 為什麼這樣安排
-真實系統幾乎都是多表關聯。這裡會刻意示範「一對多」（User 有多個 Note）與「多對多」（Note 可以有多個 Tag），並點出效能陷阱。
-
-### 操作步驟
+SQLAlchemy relationship 跨表關聯範例 (**不須實作練習，僅供複雜度參考**)
 
 `app/models/note.py`（加上外鍵與關聯）：
 ```python
@@ -571,37 +568,37 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
 
 class Note(Base):
-    __tablename__ = "notes"
+    __Tablename__ = "notes"
     id = Column(Integer, primary_key=True)
     title = Column(String(200), nullable=False)
-    owner_id = Column(Integer, ForeignKey("users.id"))
-    owner = relationship("User", back_populates="notes")
+    owner_id = Column(Integer, ForeignKey("Members.id"))
+    owner = relationship("Member", back_populates="notes")
 ```
 
-`app/models/user.py`：
+`app/models/Member.py`：
 ```python
-class User(Base):
-    __tablename__ = "users"
+class Member(Base):
+    __Tablename__ = "Members"
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True)
     notes = relationship("Note", back_populates="owner")
 ```
 
-多對多需要中介表（association table）：
+多對多需要中介表（association Table）：
 ```python
 from sqlalchemy import Table
 
-note_tags = Table(
-    "note_tags", Base.metadata,
+note_Tags = Table(
+    "note_Tags", Base.meTadaTa,
     Column("note_id", ForeignKey("notes.id"), primary_key=True),
-    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+    Column("Tag_id", ForeignKey("Tags.id"), primary_key=True),
 )
 
 class Tag(Base):
-    __tablename__ = "tags"
+    __Tablename__ = "Tags"
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
-    notes = relationship("Note", secondary=note_tags, back_populates="tags")
+    notes = relationship("Note", secondary=note_Tags, back_populates="Tags")
 ```
 
 執行 `alembic revision --autogenerate` 產生對應 migration。
@@ -617,102 +614,657 @@ for note in notes:
 from sqlalchemy.orm import joinedload
 notes = db.query(Note).options(joinedload(Note.owner)).all()
 ```
+#view 一次解決，不需考慮此問題
 
-### 本週練習
-1. 完成 Tag 的 CRUD，並實作「一則 note 新增多個 tag」的端點
-2. 用 SQLAlchemy 的 echo 模式（`create_engine(url, echo=True)`）觀察 N+1 實際印出的 SQL 語句數量
-3. 改用 `joinedload` 後，再次觀察 SQL 語句數量差異
+## Database View
+- 先了解Moodle教材TravelTest.sql的tables: Class, Inheritance, CO, Object
+- AI coding改MSSQL為PSQL寫法
+- 建立function用於跨資料表於單一Transaction (Tx) 內完成資料新增
+- 善用 `view` 方便對應API需求
+  
+### mssql to psql改寫
+> TravelTest.sql改寫psql於academic.sql。都要判斷DB或table是否存在才建立。
+命名：since -> create_at; lastmodifydt -> update_at
+
+```sql
+\if :{?DBName}
+\else
+\set DBName fastapi_dev
+\endif
+
+SELECT format('CREATE DATABASE %I', :'DBName')
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM pg_database
+    WHERE datname = :'DBName'
+)
+\gexec
+
+\connect :DBName
+
+CREATE TABLE IF NOT EXISTS class (
+    cid integer NOT NULL,
+    type smallint,
+    name varchar(100),
+    des varchar(1000),
+    idpath varchar(100),
+    namepath varchar(200),
+    create_at timestamp without time zone,
+    update_at timestamp without time zone,
+    nobject integer,
+    crank smallint,
+    orank smallint,
+    code varchar(255),
+    keywords varchar(255),
+    nlevel smallint,
+    imgid smallint,
+    nclicktrue integer NOT NULL DEFAULT 0,
+    nclick integer NOT NULL DEFAULT 0,
+    property smallint NOT NULL DEFAULT 0,
+    CONSTRAINT pk_class PRIMARY KEY (cid),
+    CONSTRAINT uq_idpath UNIQUE (idpath),
+    CONSTRAINT uq_namepath UNIQUE (namepath)
+);
+
+INSERT INTO class (cid, name, idpath, namepath)
+VALUES (0, '首頁', '0', '首頁')
+ON CONFLICT DO NOTHING;
+
+ALTER TABLE class
+ALTER COLUMN cid    -- Set the cid to be an identity column
+ADD GENERATED BY DEFAULT AS IDENTITY;
+
+CREATE TABLE IF NOT EXISTS inheritance (
+    pcid integer NOT NULL,
+    ccid integer NOT NULL,
+    rank smallint,
+    mg smallint,
+    CONSTRAINT pk_inheritance PRIMARY KEY (pcid, ccid),
+    CONSTRAINT fk_inheritance_pcid FOREIGN KEY (pcid) REFERENCES class (cid),
+    CONSTRAINT fk_inheritance_ccid FOREIGN KEY (ccid) REFERENCES class (cid)
+);
+
+CREATE TABLE IF NOT EXISTS object (
+    oid integer NOT NULL,
+    title varchar(200),
+    class varchar(50),
+    des varchar(1000),
+    address varchar(400),
+    telephone varchar(50),
+    sourceurl varchar(400),
+    nclick integer NOT NULL DEFAULT 0,
+    CONSTRAINT pk_object PRIMARY KEY (oid)
+);
+ALTER TABLE object
+ALTER COLUMN oid    -- Set the oid to be an identity column
+ADD GENERATED BY DEFAULT AS IDENTITY;
+
+CREATE TABLE IF NOT EXISTS co (
+    cid integer NOT NULL,
+    oid integer NOT NULL,
+    rank smallint,
+    mg smallint,
+    CONSTRAINT pk_co PRIMARY KEY (cid, oid),
+    CONSTRAINT fk_co_cid FOREIGN KEY (cid) REFERENCES class (cid),
+    CONSTRAINT fk_co_oid FOREIGN KEY (oid) REFERENCES object (oid)
+);
+
+```
+
+### academic.sql: add function
+在目錄下新增子目錄：
+> fun insertClass(pcid, pname, cname): 
+> 1. match class where pcid, cname then add class(cname) and get cid as ccid 
+> 2. insert Inheritance(pcid, ccid) 
+> 3. update namepath and idpath to the class(ccid)
+
+```sql
+CREATE OR REPLACE FUNCTION insertClass(pcid integer, pname varchar, cname varchar)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_ccid integer;
+    parent_idpath varchar(100);
+BEGIN
+    if exists (select 1 from class where cid = $1) = false then
+        RAISE EXCEPTION 'Parent class with cid % does not exist', pcid;
+    end if;
+    if exists (select 1 from class where cid = $1 and name = $2) = false then
+        RAISE EXCEPTION 'Class with cid %, name % does not exist', $1, $2;
+    end if;
+
+    SELECT c.cid
+    INTO v_ccid
+    FROM inheritance AS i, class AS c
+    WHERE i.pcid = $1   -- parent cid 
+      AND c.cid = i.ccid
+      AND c.name = $3   -- child class name => if exists, return the existing cid
+    ORDER BY c.cid
+    LIMIT 1;
+    -- new child class, insert it with the given name and return the new cid
+    IF v_ccid IS NULL THEN  
+        INSERT INTO class (name)
+        VALUES ($3)
+        RETURNING cid INTO v_ccid;
+    END IF;
+    -- Insert into inheritance table to establish the parent-child relationship
+    INSERT INTO inheritance (pcid, ccid)
+    VALUES ($1, v_ccid)
+    ON CONFLICT ON CONSTRAINT pk_inheritance DO NOTHING;
+
+    SELECT idpath   -- Get the idpath of the parent class
+    INTO parent_idpath
+    FROM class
+    WHERE cid = $1;
+
+    UPDATE class
+    SET namepath = concat_ws('/', NULLIF($2, ''), $3),
+        idpath = concat_ws('/', NULLIF(parent_idpath, ''), v_ccid::varchar)
+    WHERE cid = v_ccid;
+
+    RETURN v_ccid;
+END;
+$$;
+```
+
+### Test and Add data
+```sql
+SELECT insertClass(0, '首頁', 'shlin');
+SELECT * from class;    -- cid = 4
+SELECT insertClass(4, 'shlin', '主控台');
+SELECT insertClass(4, 'shlin', '授課');
+SELECT insertClass(4, 'shlin', '導師');
+SELECT insertClass(4, 'shlin', '校務');
+SELECT insertClass(4, 'shlin', '個人設定');
+SELECT * from class;    -- cid = 5 ~ 9
+SELECT insertClass(5, '主控台', '個人總覽');
+SELECT insertClass(5, '主控台', '待辦事項');
+SELECT insertClass(5, '主控台', '教務行事曆');
+SELECT insertClass(5, '主控台', '通知中心');
+SELECT insertClass(6, '授課', '開課前');
+SELECT insertClass(6, '授課', '上課中');
+SELECT insertClass(6, '授課', '開課記錄');
+SELECT insertClass(7, '導師', '導師公告');
+SELECT insertClass(7, '導師', '導師規章');
+SELECT insertClass(8, '校務', '教務公告');
+SELECT insertClass(8, '校務', '教務規章');
+SELECT insertClass(8, '校務', '開課查詢');
+SELECT insertClass(8, '校務', '服務資訊');
+SELECT insertClass(9, '個人設定', '基本資料');
+SELECT insertClass(9, '個人設定', '通知設定');
+SELECT insertClass(9, '個人設定', '申請紀錄');
+SELECT insertClass(9, '個人設定', '問題回報');
+SELECT insertClass(9, '個人設定', '登入紀錄');
+SELECT * from class;    -- cid = 5 ~ 9
+```
+
+### RESE API for sidebar
+> I've created view [vd_subclass] with pgsql. Add /api/subclass/pcid/{id} to GET data from the view where pcid = {id}
+```sql
+CREATE OR REPLACE VIEW vd_subclass AS
+SELECT p.cid as pcid, p.name as parent_name, c.cid as cid, c.name as child_name
+FROM class p, inheritance i, class c
+WHERE p.cid = i.pcid AND c.cid = i.ccid;
+SELECT * FROM vd_subclass where pcid = 4;
+SELECT * FROM vd_subclass where pcid = 9;
+
+GRANT SELECT ON vd_subclass TO dev_user; -- API最小授權原則
+```
+
+要記得授權，讓帳號可以讀view。
+- **API最小授權原則**
+
+### 本週練習 (對應自己Project需求開始實作)
+1. 完成Sidebar對應TravelTest DB的vd_subclass API需求
+2. vd_objectlist：click 鄉鎮市區，取得景點列表
+3. vd_object：取得景點詳細資訊
 
 ### 驗收標準
-- [ ] 能查詢一個 user 底下所有 notes，以及一則 note 底下所有 tags
-- [ ] 能具體說出 N+1 問題發生的原因與解法
+- [ ] REST API測試
+- [ ] API最小授權原則
 
 ---
 
-## W6：身份驗證（JWT / OAuth2）
+## W06：身份驗證（JWT / OAuth2） {#OAuth}
 
 ### 學習目標
 實作註冊、登入、JWT 簽發，以及保護需要登入才能存取的端點。
 
-### 操作步驟
+完成本週後，學生應該能：
 
-```bash
-pip install "python-jose[cryptography]" "passlib[bcrypt]"
+1. 說明 Authentication（身份驗證）與 Authorization（授權）的差異。
+2. 說明 OAuth 2.0、OpenID Connect（OIDC）、SSO、JWT 彼此的關係。
+3. 使用 Google OIDC 完成 SSO login。
+4. 將第一次登入的使用者建立到 PostgreSQL `members` table；再次登入則更新資料，不重複新增。
+5. 由自己的 FastAPI backend 簽發「本系統的 JWT」。
+6. 使用 JWT 保護需要登入才能存取的 endpoint。
+7. 說明 JWT 放在 `localStorage`、`sessionStorage`、HttpOnly cookie、memory 的風險差異。
+8. 能回答：JWT 被竄改、過期、帳號被停用、cookie 被刪除時，系統會發生什麼。
+9. 使用 AI 協助設計、實作、debug，但能自己畫出並解釋完整 authentication flow。
+
+---
+
+### Authentication vs Authorization
+
+Authentication API
+> 「你是誰？」
+
+例如：
+- Google 確認這個人真的登入了某個 Google Account。
+- FastAPI 根據 JWT 確認 request 對應哪一個 member。
+
+Authorization API
+> 「你可以做什麼？」
+例如：
+- member 可以看自己的資料 (e.g. google calendar)。
+- 此member權限還是local控管，僅作用於local services，就此與Google無關了。
+
+### 先從 OIDC 登入，再理解 OAuth 2.0 授權
+
+本週建議不要一開始就從 OAuth 2.0 規格談起，而是先從學生最熟悉的情境開始：
+
+> **使用 Google 帳號登入FastAPI網站**
+
+這時我們首先要解決的問題是：
+
+```text
+「這個使用者是誰？」
 ```
 
-`app/core/security.py`：
-```python
-from datetime import datetime, timedelta
-from jose import jwt
-from passlib.context import CryptContext
-import os
+這屬於：
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-def create_access_token(data: dict, expires_minutes: int = 60):
-    to_encode = data.copy()
-    to_encode["exp"] = datetime.utcnow() + timedelta(minutes=expires_minutes)
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+```text
+Authentication
+      ↓
+OpenID Connect (OIDC)
 ```
 
-`app/api/auth.py`（登入端點與保護路由用的 dependency）：
-```python
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import jwt, JWTError
-from sqlalchemy.orm import Session
-from app.core.database import get_db
-from app.core.security import verify_password, create_access_token, SECRET_KEY, ALGORITHM
-from app.models.user import User
+等登入完成後，再加入第二個需求：
 
-router = APIRouter(tags=["auth"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+> **登入後，使用者希望讓我們的 FastAPI 系統讀取他的 Google Calendar。**
 
-@router.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    token = create_access_token({"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
+這時問題就變成：
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+```text
+「這個使用者允許我們的系統做什麼？」
 ```
 
-保護端點：
-```python
-from app.api.auth import get_current_user
+這屬於：
 
-@router.get("/notes/me")
-def my_notes(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Note).filter(Note.owner_id == current_user.id).all()
+```text
+Authorization
+      ↓
+OAuth 2.0
 ```
 
-### 本週練習
-1. 實作 `/register` 端點（存密碼前務必用 `hash_password`）
-2. 修改所有 note CRUD 端點，加上 `get_current_user`，確保使用者只能操作自己的 note
-3. 思考：JWT 存在前端的哪裡比較安全？（localStorage vs httpOnly cookie）並寫下你的判斷理由
+因此本課程採用以下學習順序：
 
-### 驗收標準
-- [ ] 沒有 token 存取受保護端點會回傳 401
-- [ ] 使用者無法刪除/修改別人的 note
+```text
+先登入
+  ↓
+OIDC
+「你是誰？」
+
+再取得額外權限
+  ↓
+OAuth 2.0
+「你允許我做什麼？」
+```
+
+但要注意：
+
+> **技術上 OIDC 是建立在 OAuth 2.0 之上的 identity layer。**
+
+所以這裡只是為了教學理解，先從 OIDC 的登入情境開始。
+
+---
+
+## Case 1：使用 Google 帳號登入 FastAPI
+
+使用者進入我們的網站：
+
+```text
+[Browser]
+    |
+    | Sign in with Google
+    v
+[FastAPI]
+    |
+    | redirect
+    v
+[Google]
+    |
+    | 驗證 Google Account
+    v
+[FastAPI]
+```
+
+FastAPI希望知道：
+
+```text
+這個人是誰？
+```
+
+因此要求：
+
+```text
+openid
+email
+profile
+```
+
+Google完成身份驗證後，我們可能取得：
+
+```text
+sub
+email
+email_verified
+name
+picture
+```
+
+例如：
+
+```json
+{
+  "sub": "123456789",
+  "email": "amy@gmail.com",
+  "email_verified": true,
+  "name": "Amy",
+  "picture": "https://..."
+}
+```
+
+FastAPI接著可以：
+
+```text
+Google OIDC
+    ↓
+確認登入者身份
+    ↓
+取得 sub / email / name
+    ↓
+查詢 PostgreSQL members
+    ↓
+第一次登入 → INSERT member
+再次登入   → UPDATE member
+    ↓
+FastAPI 簽發自己的 App JWT
+```
+
+這一段的核心是：
+
+```text
+Authentication
+
+「這個登入者是誰？」
+```
+
+---
+
+### Google Cloud Console
+- GMail > 認證信用卡才能開發
+- Create Project > search "oauth"
+- Google Auth Platform > 用戶端 > Input data
+- Add URI: https://demo.wke.csie.ncnu.edu.tw
+- Add Redirect URI: https://demo.wke.csie.ncnu.edu.tw/s115999999/api/auth/google/callback
+
+### Web UI
+> Header [(王) 王老師] 我要改成[登入]，click以gmail登入，登入後根據gmail資料顯示。API部分先保留，我會後端寫FastAPI串接。
+
+- `GET api/auth/google/login`: begin Google OAuth and redirect the browser.
+- `GET api/auth/me`: return the signed-in profile as JSON, for example `{ "name": "王老師", "email": "teacher@example.com", "picture": "https://..." }`.
+- Return `401 Unauthorized` from `api/auth/me` when the visitor is not signed in. The frontend then keeps the sign-in link visible.
+
+The frontend uses a same-origin session (`credentials: "same-origin"`). The backend must validate the Google identity and `email_verified` server-side, then manage the session with secure cookie attributes such as `HttpOnly`, `Secure`, and an appropriate `SameSite` policy. Do not put Google client secrets in browser code.
+
+> click icon: pull down dialoug with two functions: Settings and Logout
+```js
+async function logout() {
+    if (!window.confirm("確定要登出嗎？")) {
+        return;
+    }
+
+    logoutButton.disabled = true;
+    try {
+        const response = await fetch(new URL("auth/logout", API_PATH), {
+            method: "POST",
+            credentials: "same-origin"
+        });
+        if (!response.ok) {
+            throw new Error(`登出失敗：${response.status}`);
+        }
+        window.location.reload();
+    } catch (error) {
+        logoutButton.disabled = false;
+        console.error("無法登出", error);
+        window.alert("登出失敗，稍後再試");
+    }
+}
+```
+
+### API and DB
+
+```prompt
+加入gmail登入的API功能，我前端已經寫好，完成對應的：
+GET api/auth/google/login
+GET api/auth/me
+並於 ./psql/createtables.sql加入member table，可以記錄取地的gmail資訊，並透過JWT配合後端DB紀錄，於後續requests都可以順利完成
+```
+
+看懂修改的程式碼，並經過幾次對話修改。
+
+```prompt
+整理此對話的重要修改檔案與對應codes於oauth.md，並說明其技術觀念與細節。
+debug過程也隨後詳實記錄討論
+```
+
+### README.md / Google Login
+Google Developer:
+- Google Cloud Console > GMail登入
+- Try for feee: 還是要走完信用卡認證過程
+- Create Project > the Project > Search "oauth"
+- 建立OAuth用戶端 > 用戶端 > 網頁應用程式 > name 
+- 新增URI (for CORS): https://demo.wke.csie.ncnu.edu.tw
+- 新增redirect URI: https://demo.wke.csie.ncnu.edu.tw/s115999999/api/auth/google/callback
+- Save
+
+Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
+`JWT_SECRET_KEY`, and `SESSION_SECRET_KEY` in `.env`. Register the exact value of
+`GOOGLE_REDIRECT_URI` as an authorized redirect URI in Google Cloud Console.
+For local HTTP development, set `AUTH_COOKIE_SECURE=false`; use `true` behind
+HTTPS in production. Set `AUTH_SUCCESS_REDIRECT_URL` to the frontend URL after
+login (including `/s115999999/` when deployed under that path).
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/auth/google/login` | Redirect to Google sign-in |
+| `GET` | `/api/auth/google/callback` | OAuth callback; persists the member and sets an HttpOnly JWT cookie |
+| `GET` | `/api/auth/me` | Return `name`, `email`, and `picture`; returns `401` when signed out |
+
+- The callback is handled server-side. 
+- The JWT is sent as a same-origin cookie by the browser; API clients may alternatively send it as `Authorization: Bearer`.
+- Notes and **subclass** endpoints require a valid JWT whose member still exists in
+the database.
+
+### Google OAuth / JWT 登入紀錄
+
+本文整理目前 FastAPI 專案的 Google 登入流程、主要程式碼、PostgreSQL schema、部署設定與本次對話中的除錯結果。密碼、OAuth client secret、JWT secret 等值一律不記錄在本文。
+
+## 目前狀態摘要
+
+- 前端進入點：`GET /api/auth/google/login`。
+- 正式 Google callback：`GET /api/auth/google/callback`。Google Cloud Console 與 `GOOGLE_REDIRECT_URI` 必須逐字相同；目前使用公開 HTTPS host 與 `/s115999999` 部署前綴，路徑尾端**不加斜線**。
+- callback 別名仍存在：`/api/auth/callback`、`/api/auth/callback/`。正式設定仍建議統一使用上面的 `/google/callback` 路徑。
+- 登入成功後，後端以 HttpOnly cookie 傳 JWT；`GET /api/auth/me` 回傳登入者資料。
+- Notes 與 subclass 路由要求已驗證 JWT，health/version 等公開路由不受影響。
+- DB 連線及 `member` 表曾確認存在，但當時 API 使用的 `dev_user` 對 table 和 identity sequence 沒有權限。最新 SQL 已加入 GRANT；需以具備授權權限的 DB role 執行後才會生效。
+
+### 程式碼分工
+
+| 檔案 | 責任與重要程式碼 |
+| --- | --- |
+| [app/main.py](app/main.py) | 建立 FastAPI app，設定 `root_path="/s115999999"`，掛載 `SessionMiddleware`，將 auth router 加到 `/api` router。OAuth state 存在短效 session cookie；靜態檔案最後才 mount，避免攔截 API。 |
+| [app/routers/auth.py](app/routers/auth.py) | Authlib 註冊 Google OpenID Connect metadata 及 `openid email profile` scope。`google_login()` 轉址到 Google；`google_callback()` 驗證授權回應、檢查 `sub/email/email_verified`、upsert member、簽發 JWT cookie；`read_current_member()` 提供前端 profile。 |
+| [app/core/security.py](app/core/security.py) | 建立 HS256 JWT，驗證 cookie 或 Bearer token 的簽章、issuer、必要 claims 與期限，再以 `sub` 作 member id。先驗 JWT、後取 DB，確保未登入請求可以直接得到 401。 |
+| [app/repositories/member.py](app/repositories/member.py) | 使用參數化 SQL 將 Google profile 寫入 `member`；`google_sub` 衝突時更新 profile。另依 JWT member id 查詢仍存在且已驗證的 member。 |
+| [app/routers/notes.py](app/routers/notes.py) | router 層級加入 `Depends(get_current_member)`，保護整組 notes API。 |
+| [app/routers/subclass.py](app/routers/subclass.py) | router 層級加入同一個 member dependency，保護 subclass API。 |
+| [app/core/db.py](app/core/db.py) | 由 `DATABASE_URL` 建立 psycopg connection，FastAPI request 結束時關閉 connection。 |
+| [psql/createtables.sql](psql/createtables.sql) | 定義 `member` 表及 `dev_user` 的 table/identity sequence 權限。腳本也會刪除並重建 notes，請先修復檔尾未完成 SQL，並避免在有 notes 資料的正式 DB 執行整份腳本。 |
+| [requirements.txt](requirements.txt) | 登入依賴包含 Authlib、PyJWT、httpx、itsdangerous；`itsdangerous` 是 Starlette SessionMiddleware 簽署 session 所需。 |
+| [.env.example](.env.example) | 設定名稱範本。正式 secret 只放在未提交的 `.env` 或部署平台 secret store，不要把真實憑證寫進此範例或文件。 |
+
+## 登入流程
+
+```text
+Browser
+	-> GET /api/auth/google/login
+	-> Authlib 建立 OAuth state，導向 Google
+	-> Google 驗證使用者，導回 GOOGLE_REDIRECT_URI
+	-> 後端檢查 state、交換 authorization code、驗證 OIDC userinfo
+	-> 確認 sub、email、email_verified=true
+	-> upsert public.member
+	-> 簽發 JWT，寫入 HttpOnly cookie
+	-> 303 redirect 到 AUTH_SUCCESS_REDIRECT_URL
+	-> 前端 GET /api/auth/me（same-origin cookie）
+	-> JWT 驗證後，以 member id 查 DB，再回傳 name/email/picture
+```
+
+### Google OAuth / OIDC
+
+前端只導向 login endpoint，不直接處理 Google client secret。Authlib 使用 Google 的 OpenID Connect discovery 文件取得授權與 token endpoint。`state` 用來關聯發起與返回的 OAuth 流程並降低 CSRF 風險；FastAPI 的 `SessionMiddleware` 透過 `SESSION_SECRET_KEY` 簽署 session cookie。callback 必須由 login 流程導入，直接在網址列打開 callback 沒有有效 state/code，不能當作登入測試。
+
+後端不以 email 當 Google 唯一識別，而使用 OIDC 的 `sub`（Google account subject）作為 `google_sub` unique key。email 必須存在且 `email_verified` 為 true 才接受。姓名、圖片可能不存在，所以 schema 欄位允許 NULL。
+
+### JWT 與後續 API
+
+JWT claims 包含：
+
+| Claim | 用途 |
+| --- | --- |
+| `sub` | 本系統 `member.id`，不是 email 或 Google subject。 |
+| `iss` | 固定 issuer `wke-api`，防止接受其他 issuer 的 token。 |
+| `iat` | 簽發時間。 |
+| `exp` | 到期時間，預設由 `ACCESS_TOKEN_EXPIRE_SECONDS=28800` 控制。 |
+
+演算法固定為 HS256，不接受 token 自行指定其他演算法。瀏覽器使用 `HttpOnly` cookie，JavaScript 無法直接讀取；同時可讓 API client 以 `Authorization: Bearer <JWT>` 傳送。每個受保護 request 除了驗簽與期限，也會以 `sub` 查詢 DB，因此刪除/停用帳號後，舊 token 不會只靠簽章繼續被接受。
+
+生產環境設定 `AUTH_COOKIE_SECURE=true`，只透過 HTTPS 傳送 cookie；`SameSite=Lax` 適用一般 top-level Google redirect callback。`SESSION_SECRET_KEY` 和 `JWT_SECRET_KEY` 必須是彼此不同、不可預測的長隨機值。程式中的 development fallback 不可用於正式部署。
+
+## 資料表與權限
+
+`member` 的重要欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `id` | 本系統 identity primary key，JWT 的 `sub`。 |
+| `google_sub` | Google OIDC 穩定識別值，unique；用於 login upsert。 |
+| `email` | Google 回傳且已驗證的 email。 |
+| `name`, `picture` | 前端 profile 欄位，可為 NULL。 |
+| `email_verified` | 只有 Google 回報已驗證時才可登入。 |
+| `created_at`, `updated_at` | 建立與 profile 更新時間。 |
+
+Repository 使用 `INSERT ... ON CONFLICT (google_sub) DO UPDATE`，所以首次登入新增會員，後續登入更新 Google profile，不會因同一帳號重複建立資料。資料庫 role 至少需要 member 的 SELECT/INSERT/UPDATE，以及 identity sequence 的 USAGE/SELECT。最新 SQL 內的授權概念如下：
+
+```sql
+GRANT SELECT, INSERT, UPDATE ON TABLE public.member TO dev_user;
+GRANT USAGE, SELECT ON SEQUENCE public.member_id_seq TO dev_user;
+```
+
+這些 GRANT 必須由 table/sequence owner 或有授權權限的管理角色執行。修改 SQL 檔本身不會改變已存在資料庫的權限。若正式環境的 API role 不是 `dev_user`，應把 `TO` 後面的角色換成實際 `DATABASE_URL` 使用者。
+
+## 部署設定
+
+正式環境的 OAuth callback URI 必須在 Google Cloud Console 的 OAuth 2.0 Web application client 中登記，且下列值要完全一致：
+
+```text
+Google Console Authorized redirect URI
+GOOGLE_REDIRECT_URI
+https://demo.wke.csie.ncnu.edu.tw/s115999999/api/auth/google/callback
+```
+
+scheme、host、deployment prefix、path 及結尾斜線都是比對的一部分。`/callback`、`/google/callback`、是否有尾端 `/` 是不同 URI。使用者瀏覽器在 `/s115999999/` 下方，但反向代理會移除部署前綴後轉送到 Uvicorn；`root_path` 負責告知 FastAPI 外部部署前綴。Google 仍要登記外部瀏覽器可到達的完整 HTTPS URI。
+
+認證相關環境變數：
+
+| 變數 | 用途 |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` | Google OAuth Web client ID。 |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret；僅後端使用。 |
+| `GOOGLE_REDIRECT_URI` | 完全匹配 Google Console 設定的 callback URL。 |
+| `JWT_SECRET_KEY` | HS256 access token 簽章密鑰。 |
+| `SESSION_SECRET_KEY` | OAuth state session cookie 簽章密鑰，需與 JWT key 不同。 |
+| `AUTH_COOKIE_SECURE` | HTTPS 部署設為 `true`；僅本機 HTTP 開發才設 `false`。 |
+| `ACCESS_TOKEN_EXPIRE_SECONDS` | JWT 有效秒數。 |
+| `AUTH_SUCCESS_REDIRECT_URL` | callback 登入完成後的前端 URL，需含 `/s115999999/`。 |
+
+```env.example
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:7777/api/auth/google/callback
+JWT_SECRET_KEY=replace-with-a-long-random-secret
+SESSION_SECRET_KEY=replace-with-a-different-long-random-secret
+AUTH_COOKIE_SECURE=true
+ACCESS_TOKEN_EXPIRE_SECONDS=28800
+AUTH_SUCCESS_REDIRECT_URL=http://localhost:7777/
+```
+
+改動 `.env` 後需重啟 Uvicorn，因為 OAuth client 在模組載入時讀取設定。若 callback 已經失敗，請重新從 login endpoint 發起一次流程，讓新的 state/code 配對完整。
+
+```prompt
+Add /api/auth/logout so that user can logout safely.
+```
+
+## 本次 Debug 時序
+
+### 1. 找出前端契約
+
+FastAPI workspace 自己的 `public/index.html` 是簡單占位頁；實際網站設定在外部 `C:\code\web\webui`。檢查實際前端後確認：登入連結指向 `/api/auth/google/login`，profile loader 使用 same-origin `GET /api/auth/me`，遇到 401 就維持登入按鈕。故後端採瀏覽器 redirect + cookie，而不是要求前端傳 Google ID token JSON。
+
+### 2. Callback 路徑回 404
+
+曾直接測試 `/s115999999/api/auth/callback/`，回應 `{"detail":"Not Found"}`。當時只有 `/api/auth/google/callback`，路徑確實不一致；後端增加 `/api/auth/callback` 和 `/api/auth/callback/` alias。Google Console 後來確認登記的是 `/api/auth/google/callback`，因此正式 `GOOGLE_REDIRECT_URI` 應採 canonical `/google/callback`，不要為了 alias 把 Console callback 改成另一條路徑。
+
+### 3. Google 回報 request invalid
+
+檢查 `.env` 發現 callback 值末尾有 `/`，但 Google Console 的 Authorized redirect URI 沒有 `/`。OAuth redirect URI 必須完全相同；已將 `.env` 改為無尾斜線的 canonical URL。透過 TestClient 呼叫 login endpoint，從回應 Location 的 query string 取出 `redirect_uri`，實際比對結果與 Console URL 相同。這證明後端送出的值正確，但仍需在部署伺服器重啟後從 login endpoint 重跑整個 OAuth 流程。
+
+### 4. callback 直接開啟與匿名 `/me`
+
+callback URL 直接在瀏覽器開啟時沒有 Google 返回的有效 state/code，不代表 OAuth 流程失敗；callback 應由 `/google/login` 開始。另一個測試發現未登入 `/me` 在 DB dependency 先連線且 DB 不可用時可能回 500。將 security dependency 拆成「先驗 JWT、再查 DB」兩段後，匿名請求可先回 401，不需開 DB connection。已用 TestClient 驗證無 DB 時仍為 401。
+
+### 5. OAuth callback 回 500：確認資料庫權限
+
+使用當時 `.env` 的資料庫設定做唯讀檢查，結果如下：
+
+- PostgreSQL connection 成功，`member` 與 `notes` relation 都存在。
+- 從 PostgreSQL catalog 讀到的 `member` 欄位與程式預期相符，identity sequence 為 `public.member_id_seq`。
+- 目前連線 role 為 `dev_user`，但 `has_table_privilege` 對 member 的 INSERT 和 SELECT 都是 false；`information_schema.columns` 也因權限不足回傳空集合。
+
+因此 callback 在 `upsert_google_member()` 執行 INSERT/ON CONFLICT 時會因 DB 權限不足失敗，這是當時 500 的已驗證根因。最新 `createtables.sql` 加入 member 與 identity sequence GRANT；但**尚未由工具驗證這些 GRANT 已在實際 DB 執行成功**。需用 owner/admin 執行授權，再重新開始 Google login 流程。
+
+### 6. 測試與驗證記錄
+
+- Pylance 對 auth/security/repository/main 等修改檔案沒有診斷。
+- `pip check` 無 broken requirements。
+- FastAPI smoke test 確認 health 是公開端點，未設定 OAuth 時 login 回 503，匿名 `/me` 與受保護的 notes 回 401。
+- 合成 JWT 測試確認 cookie 與 Bearer 都可驗證；錯誤 JWT 回 401。
+- OpenAPI 包含 login 與 `/me`，OAuth callback 隱藏於 schema。
+- login response 的 `redirect_uri` 曾經實際抽取並確認為 Google Console 設定的精確 URL。
+- 曾出現 Starlette 對 `httpx` TestClient 的 deprecation warning；測試仍成功，這不是 callback 500 的原因。
+- 真正的 Google-to-Google code exchange 與成功後 member upsert 尚未在本機端到端重跑；需先套用資料庫 GRANT，並在部署環境從 login endpoint 完整測試。
+
+## 安全與維運提醒
+
+- 本次對話曾貼出 Google client secret；應立即在 Google Cloud Console 輪替該 secret，更新部署環境後再撤銷舊值。此文件不保存該值。
+- `AUTH_COOKIE_SECURE=true`，確保只有在https時傳送。
+- 若 `JWT_SECRET_KEY` 或 `SESSION_SECRET_KEY` 仍是範例 placeholder，請先換成兩個互不相同的高熵隨機值。更換 JWT key 會使既有 JWT 全數失效；更換 session key 會使進行中的 OAuth state session 失效，需要重新登入。
+- 不要把 `.env`、OAuth secrets、JWT、cookie 值或帶 authorization code 的完整 callback URL commit 到 Git、issue 或文件。
+- 執行 `psql/createtables.sql` 前先修復目前檔尾未完成的 `SELECT *`。此腳本前段會 `DROP TABLE IF EXISTS notes`，正式 DB 請採非破壞性的 migration 或只執行需要的 member/GRANT SQL。
+
+
 
 ---
 
