@@ -24,7 +24,7 @@ webui_dir = BASE_DIR / "webui"
 
 class HtmlCssOnlyStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
-        if Path(path).suffix.lower() not in {".html", ".css"}:
+        if Path(path).suffix.lower() not in {".html", ".css", ".js"}:
             return PlainTextResponse("Not Found", status_code=404)
         return await super().get_response(path, scope)
 
@@ -33,6 +33,17 @@ class HtmlCssOnlyStaticFiles(StaticFiles):
 @app.get("/static/style.css")
 async def serve_stylesheet():
     return FileResponse(webui_dir / "style.css", media_type="text/css")
+
+
+@app.get("/style.css")
+async def serve_local_stylesheet():
+    return FileResponse(webui_dir / "style.css", media_type="text/css")
+
+
+@app.get("/script.js")
+async def serve_script():
+    return FileResponse(webui_dir / "script.js", media_type="text/javascript")
+
 
 @app.get("/")
 async def serve_index():

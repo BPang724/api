@@ -547,7 +547,7 @@ app.include_router(notes.router)
 3. 用 `/docs` 的 Swagger UI 手動測試所有端點
 
 ### 驗收標準
-- [ ] 五個 CRUD 端點全部正常運作
+- [x] 五個 CRUD 端點全部正常運作
 - [x] 錯誤情境（找不到資源）回傳正確的 HTTP 狀態碼
 
 ### 學習心得
@@ -712,11 +712,11 @@ CREATE TABLE IF NOT EXISTS co (
 ```
 
 ### academic.sql: add function
-在目錄下新增子目錄：
+在 `api/psql/academic.sql` 建立以下函式。呼叫一次會在同一個資料庫交易中建立分類、關聯並更新完整階層路徑；重複呼叫相同父分類與名稱會回傳既有分類。
 > fun insertClass(pcid, pname, cname): 
 > 1. match class where pcid, cname then add class(cname) and get cid as ccid 
 > 2. insert Inheritance(pcid, ccid) 
-> 3. update namepath and idpath to the class(ccid)
+> 3. update the complete namepath and idpath to the class(ccid)
 
 ```sql
 CREATE OR REPLACE FUNCTION insertClass(pcid integer, pname varchar, cname varchar)
@@ -726,40 +726,37 @@ AS $$
 DECLARE
     v_ccid integer;
     parent_idpath varchar(100);
+    parent_namepath varchar(200);
 BEGIN
-    if exists (select 1 from class where cid = $1) = false then
-        RAISE EXCEPTION 'Parent class with cid % does not exist', pcid;
-    end if;
-    if exists (select 1 from class where cid = $1 and name = $2) = false then
-        RAISE EXCEPTION 'Class with cid %, name % does not exist', $1, $2;
+    SELECT idpath, namepath
+    INTO parent_idpath, parent_namepath
+    FROM class
+    WHERE cid = $1 AND name = $2;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Parent class with cid %, name % does not exist', $1, $2;
     end if;
 
     SELECT c.cid
     INTO v_ccid
-    FROM inheritance AS i, class AS c
-    WHERE i.pcid = $1   -- parent cid 
-      AND c.cid = i.ccid
-      AND c.name = $3   -- child class name => if exists, return the existing cid
+    FROM inheritance AS i
+    JOIN class AS c ON c.cid = i.ccid
+    WHERE i.pcid = $1 AND c.name = $3
     ORDER BY c.cid
     LIMIT 1;
-    -- new child class, insert it with the given name and return the new cid
-    IF v_ccid IS NULL THEN  
+
+    IF v_ccid IS NULL THEN
         INSERT INTO class (name)
         VALUES ($3)
         RETURNING cid INTO v_ccid;
     END IF;
-    -- Insert into inheritance table to establish the parent-child relationship
+
     INSERT INTO inheritance (pcid, ccid)
     VALUES ($1, v_ccid)
     ON CONFLICT ON CONSTRAINT pk_inheritance DO NOTHING;
 
-    SELECT idpath   -- Get the idpath of the parent class
-    INTO parent_idpath
-    FROM class
-    WHERE cid = $1;
-
     UPDATE class
-    SET namepath = concat_ws('/', NULLIF($2, ''), $3),
+    SET namepath = concat_ws('/', NULLIF(parent_namepath, ''), $3),
         idpath = concat_ws('/', NULLIF(parent_idpath, ''), v_ccid::varchar)
     WHERE cid = v_ccid;
 
@@ -809,10 +806,13 @@ WHERE p.cid = i.pcid AND c.cid = i.ccid;
 SELECT * FROM vd_subclass where pcid = 4;
 SELECT * FROM vd_subclass where pcid = 9;
 
-GRANT SELECT ON vd_subclass TO dev_user; -- API最小授權原則
+GRANT USAGE ON SCHEMA public TO dev_user;
+GRANT SELECT ON vd_subclass TO dev_user;
 ```
 
-要記得授權，讓帳號可以讀view。
+在 `api` 目錄執行 `psql -d fastapi_dev -f psql/academic.sql` 建立資料表、函式與 View。若 API 使用的資料庫角色不是 `dev_user`，請把以上 `GRANT` 的角色名稱換成實際角色，讓 API 帳號能讀取 schema 和 View。
+
+FastAPI 端點為 `GET /api/subclass/pcid/{pcid}`，回傳欄位 `pcid`、`parent_name`、`cid`、`child_name`；沒有子分類時回傳空陣列。
 - **API最小授權原則**
 
 ### 本週練習 (對應自己Project需求開始實作)
