@@ -12,12 +12,14 @@
 | W04 | [CRUD API 完整實作](#CRUD) | 一組完整的 RESTful CRUD 端點 |
 | W05 | [關聯式設計：view](#DbView) | 多資料表關聯查詢 |
 | W06 | [身份驗證（JWT / OAuth2）](#OAuth) | 登入、保護路由 |
-| W07 | [測試（pytest）](#pytest) | 自動化測試覆蓋 CRUD + Auth |
-| W08 | [非同步與連線池](#pools) | Async ORM 操作、效能觀念 |
+| W07 | [EER Model and AI Gen Data](#EER) | EER設計與AI產生測資 |
+| W08 | [Schema and Reuse Data Views](#ReuseView) | 利用Schema於data model隔離，並善用eer_subclass讓API可以reuse |
 | W09 | [進階查詢：分頁、篩選、搜尋](#paging) | Query 參數化的 API |
 | W10 | [錯誤處理、Logging、Middleware](#logging) | 具生產等級的錯誤回應與紀錄 |
 | W11 | [Docker 化](#Docker) | docker-compose 一鍵啟動 API + DB |
 | W12 | [部署與整合專題](#deploy) | 完整可展示的後端專案 |
+| W07 | [測試（pytest）](#pytest) | 自動化測試覆蓋 CRUD + Auth |
+| W08 | [非同步與連線池](#pools) | Async ORM 操作、效能觀念 |
 
 ---
 
@@ -1268,15 +1270,14 @@ callback URL 直接在瀏覽器開啟時沒有 Google 返回的有效 state/code
 
 ---
 
-## W7：測試（pytest）
+## W7：測試（pytest）{#pytest}
 
-### 學習目標
 用 pytest + FastAPI TestClient 對 CRUD 與 Auth 寫自動化測試。
 
 ### 操作步驟
 
 ```bash
-pip install pytest httpx
+pip Install pytest httpx
 ```
 
 `tests/conftest.py`（用獨立測試資料庫，避免污染開發資料）：
@@ -1284,21 +1285,21 @@ pip install pytest httpx
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
+from FastAPI.testclient import TestClient
 from app.main import app
-from app.core.database import Base, get_db
+from app.core.Database import Base, get_db
 
-TEST_DATABASE_URL = "postgresql://dev_user:dev_password@localhost:5432/fastapi_test"
-engine = create_engine(TEST_DATABASE_URL)
+TEST_Database_URL = "postgresql://dev_Member:dev_password@localhost:5432/FastAPI_test"
+engine = create_engine(TEST_Database_URL)
 TestingSessionLocal = sessionmaker(bind=engine)
 
 @pytest.fixture(scope="function")
 def db_session():
-    Base.metadata.create_all(bind=engine)
+    Base.meTadaTa.create_all(bind=engine)
     session = TestingSessionLocal()
     yield session
     session.close()
-    Base.metadata.drop_all(bind=engine)
+    Base.meTadaTa.drop_all(bind=engine)
 
 @pytest.fixture
 def client(db_session):
@@ -1312,12 +1313,12 @@ def client(db_session):
 ```python
 def test_create_note(client):
     response = client.post("/notes/", json={"title": "test", "content": "hello"})
-    assert response.status_code == 200
+    assert response.Status_code == 200
     assert response.json()["title"] == "test"
 
 def test_get_nonexistent_note(client):
     response = client.get("/notes/999")
-    assert response.status_code == 404
+    assert response.Status_code == 404
 ```
 
 ### 本週練習
@@ -1331,7 +1332,7 @@ def test_get_nonexistent_note(client):
 
 ---
 
-## W8：非同步與連線池
+## W8：非同步與連線池 {#pools}
 
 ### 學習目標
 理解 FastAPI 的 async 支援，並改用 async ORM 操作。
@@ -1342,15 +1343,15 @@ def test_get_nonexistent_note(client):
 ### 操作步驟
 
 ```bash
-pip install asyncpg "sqlalchemy[asyncio]"
+pip Install asyncpg "sqlalchemy[asyncio]"
 ```
 
-`app/core/database.py`（改為 async engine）：
+`app/core/Database.py`（改為 async engine）：
 ```python
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-ASYNC_DATABASE_URL = "postgresql+asyncpg://dev_user:dev_password@localhost:5432/fastapi_dev"
-engine = create_async_engine(ASYNC_DATABASE_URL, pool_size=10, max_overflow=20)
+ASYNC_Database_URL = "postgresql+asyncpg://dev_Member:dev_password@localhost:5432/FastAPI_dev"
+engine = create_async_engine(ASYNC_Database_URL, pool_size=10, max_overflow=20)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 async def get_db():

@@ -1,11 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from core.security import get_current_member
 from core.db import get_db
 from repositories import notes as note_repository
 from schemas.notes import NoteCreate, NoteResponse
 
-router = APIRouter(prefix="/notes", tags=["notes"])
+router = APIRouter(
+    prefix="/notes",
+    tags=["notes"],
+    dependencies=[Depends(get_current_member)],
+)
 
 
 @router.post("", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)

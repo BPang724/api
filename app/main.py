@@ -1,8 +1,13 @@
+import os
 from pathlib import Path
+
 from fastapi import FastAPI, APIRouter
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+
+from routers.auth import router as auth_router
 from routers.notes import router as notes_router
+from starlette.middleware.sessions import SessionMiddleware
 
 app = FastAPI(
     title="My Backend API",
@@ -13,6 +18,17 @@ app = FastAPI(
 )
 api_router = APIRouter(prefix="/api")
 
+session_secret = os.getenv("SESSION_SECRET_KEY")
+if session_secret:
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=session_secret,
+        max_age=600,
+        same_site="lax",
+        https_only=os.getenv("AUTH_COOKIE_SECURE", "true").lower() != "false",
+    )
+
+api_router.include_router(auth_router)
 api_router.include_router(notes_router)
 app.include_router(api_router)
 
