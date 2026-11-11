@@ -58,12 +58,16 @@ async def serve_local_stylesheet():
 
 @app.get("/script.js")
 async def serve_script():
-    return FileResponse(webui_dir / "script.js", media_type="text/javascript")
+    response = FileResponse(webui_dir / "script.js", media_type="text/javascript")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/")
 async def serve_index():
-    return FileResponse(webui_dir / "index.html")
+    response = FileResponse(webui_dir / "index.html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 # 掛載其他靜態資源，並限制只提供 HTML 和 CSS
