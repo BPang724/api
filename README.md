@@ -29,6 +29,10 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 不要提交 `.env` 或將真實密鑰貼到程式碼、文件或前端。
 
+若要限制實驗區僅供單一 Google 帳戶使用，請在 `.env` 設定
+`EXPERIMENTS_OWNER_EMAIL` 為該帳戶的信箱。未設定時，所有帳戶（包含已登入
+帳戶）都只能使用影片觀看區；其他已登入帳戶也只會看到影片觀看區。
+
 ### 2. 建立會員表
 
 在應用程式使用的 PostgreSQL 資料庫中執行 `psql/create_member.sql`。
@@ -53,6 +57,7 @@ uvicorn app.main:app --reload
 `/api/auth/google/callback`。登入後 `/api/auth/me` 回傳目前會員；
 `POST /api/auth/logout` 清除登入 cookie。沒有有效 token 時，`/api/notes`
 端點回傳 `401`。
+`/api/auth/me` 另會回傳 `can_access_experiments`，供前端控制實驗區顯示。
 
 目前 Notes 尚未歸屬特定會員；此階段只限制必須登入，登入會員之間仍共用
 同一組 Notes。若要讓每人只能存取自己的資料，需再為 Notes 加入 `member_id`

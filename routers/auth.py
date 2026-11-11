@@ -43,6 +43,11 @@ def _cookie_secure() -> bool:
     return value == "true"
 
 
+def _can_access_experiments(email: str) -> bool:
+    owner_email = os.getenv("EXPERIMENTS_OWNER_EMAIL", "").strip()
+    return bool(owner_email) and email.strip().casefold() == owner_email.casefold()
+
+
 def _validate_auth_configuration(request: Request) -> tuple[str, int]:
     if "session" not in request.scope:
         raise HTTPException(
@@ -184,9 +189,14 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 def read_current_member(
     response: Response,
     member: Member = Depends(get_current_member),
-) -> Member:
+) -> MemberProfile:
     response.headers["Cache-Control"] = "no-store"
-    return member
+    return MemberProfile(
+        name=member.name,
+        email=member.email,
+        picture=member.picture,
+        can_access_experiments=_can_access_experiments(member.email),
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

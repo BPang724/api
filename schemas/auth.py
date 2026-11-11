@@ -7,3 +7,4 @@ class MemberProfile(BaseModel):
     name: str | None
     email: str
     picture: str | None
+    can_access_experiments: bool
