@@ -6,6 +6,8 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from routers.auth import router as auth_router
+from routers.datasets import router as datasets_router
+from routers.datasets import videos_router
 from routers.notes import router as notes_router
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -29,6 +31,8 @@ if session_secret:
     )
 
 api_router.include_router(auth_router)
+api_router.include_router(datasets_router)
+api_router.include_router(videos_router)
 api_router.include_router(notes_router)
 app.include_router(api_router)
 
@@ -63,6 +67,30 @@ async def serve_script():
     return response
 
 
+@app.get("/css/{filename}")
+async def serve_frontend_stylesheet(filename: str):
+    css_dir = (webui_dir / "css").resolve()
+    stylesheet_path = (css_dir / filename).resolve()
+    if stylesheet_path.parent != css_dir or stylesheet_path.suffix.lower() != ".css":
+        return PlainTextResponse("Not Found", status_code=404)
+    if not stylesheet_path.is_file():
+        return PlainTextResponse("Not Found", status_code=404)
+    return FileResponse(stylesheet_path, media_type="text/css")
+
+
+@app.get("/js/{filename}")
+async def serve_frontend_script(filename: str):
+    js_dir = (webui_dir / "js").resolve()
+    script_path = (js_dir / filename).resolve()
+    if script_path.parent != js_dir or script_path.suffix.lower() != ".js":
+        return PlainTextResponse("Not Found", status_code=404)
+    if not script_path.is_file():
+        return PlainTextResponse("Not Found", status_code=404)
+    response = FileResponse(script_path, media_type="text/javascript")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/")
 async def serve_index():
     response = FileResponse(webui_dir / "index.html")
@@ -70,7 +98,7 @@ async def serve_index():
     return response
 
 
-# 掛載其他靜態資源，並限制只提供 HTML 和 CSS
+# 掛載其他靜態資源，並限制只提供 HTML、CSS 和 JavaScript
 app.mount("/static", HtmlCssOnlyStaticFiles(directory=str(webui_dir)), name="static")
 
 

@@ -14,6 +14,7 @@ from core.security import (
     ACCESS_TOKEN_COOKIE,
     create_access_token,
     get_current_member,
+    has_experiment_access,
 )
 from models.member import Member
 from repositories.members import upsert_google_member
@@ -41,11 +42,6 @@ def _cookie_secure() -> bool:
             detail="Authentication cookie security setting is misconfigured.",
         )
     return value == "true"
-
-
-def _can_access_experiments(email: str) -> bool:
-    owner_email = os.getenv("EXPERIMENTS_OWNER_EMAIL", "").strip()
-    return bool(owner_email) and email.strip().casefold() == owner_email.casefold()
 
 
 def _validate_auth_configuration(request: Request) -> tuple[str, int]:
@@ -195,7 +191,7 @@ def read_current_member(
         name=member.name,
         email=member.email,
         picture=member.picture,
-        can_access_experiments=_can_access_experiments(member.email),
+        can_access_experiments=has_experiment_access(member.email),
     )
 
 

@@ -122,3 +122,19 @@ def get_current_member(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return member
+
+
+def has_experiment_access(email: str) -> bool:
+    owner_email = os.getenv("EXPERIMENTS_OWNER_EMAIL", "").strip()
+    return bool(owner_email) and email.strip().casefold() == owner_email.casefold()
+
+
+def get_experiment_member(
+    member: Member = Depends(get_current_member),
+) -> Member:
+    if not has_experiment_access(member.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account does not have access to experiment data.",
+        )
+    return member

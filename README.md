@@ -46,7 +46,71 @@ GRANT SELECT, INSERT, UPDATE ON public.member TO dev_user;
 GRANT USAGE, SELECT ON SEQUENCE public.member_id_seq TO dev_user;
 ```
 
-### 3. 安裝並啟動
+### 3. 建立 Dataset 資料表
+
+在與 `DATABASE_URL` 相同的 PostgreSQL 資料庫中執行
+`psql/create_dataset_tables.sql`。此腳本會建立 Dataset、Video、多對多關聯
+及 Ground Truth 時間點資料表；使用 `CREATE TABLE IF NOT EXISTS` 和
+`CREATE INDEX IF NOT EXISTS`，不會刪除或修改既有資料。
+
+```powershell
+psql -d <database_name> -v ON_ERROR_STOP=1 -f psql/create_dataset_tables.sql
+```
+
+請將 `<database_name>` 換成 API `DATABASE_URL` 指向的資料庫名稱。執行帳號
+需要建立資料表、索引及使用 identity sequence 的權限；若 API 使用不同角色，
+請由資料庫管理者授予該角色對新資料表及其 identity sequences 的所需權限。
+
+`ground_truth_timestamps.video_id` 直接參照 `videos.id`，因此同一支影片在
+不同 Dataset 中共用同一份標註。刪除 Dataset 會刪除其
+`dataset_videos` 關聯，但不會刪除影片或 Ground Truth；刪除 Video 則會
+清除相關 Dataset 關聯及該影片的時間點。
+
+### Dataset 查詢 API
+
+已登入且符合 `EXPERIMENTS_OWNER_EMAIL` 的帳戶可以使用唯讀端點：
+
+- `GET /api/datasets`：回傳 Dataset 清單及各自影片數。
+- `GET /api/datasets/{dataset_id}`：回傳 Dataset、影片及各影片共用的
+  Ground Truth 秒數。
+
+例如 Dataset 詳細資料的影片會包含：
+
+```json
+{
+  "id": 81,
+  "youtube_id": "abcdefghijk",
+  "url": "https://www.youtube.com/watch?v=abcdefghijk",
+  "title": null,
+  "duration_seconds": null,
+  "ground_truth_timestamps": [205, 431]
+}
+```
+
+查詢結果不會快取；不存在的 Dataset 回傳 `404`，未登入回傳 `401`，
+沒有實驗資料權限回傳 `403`。
+
+### Dataset 寫入 API
+
+以下端點同樣要求登入且帳戶符合 `EXPERIMENTS_OWNER_EMAIL`：
+
+- `POST /api/datasets`，body `{"name":"course-slides"}`：建立 Dataset。
+- `PATCH /api/datasets/{dataset_id}`，body `{"name":"updated-name"}`：修改名稱。
+- `DELETE /api/datasets/{dataset_id}`：刪除 Dataset 及其關聯，不刪除共用影片。
+- `POST /api/datasets/{dataset_id}/videos`，body
+  `{"url":"https://www.youtube.com/watch?v=abcdefghijk"}`：將影片加入 Dataset；
+  相同影片會重用同一筆 Video。
+- `DELETE /api/datasets/{dataset_id}/videos/{video_id}`：只移除這筆 Dataset 關聯。
+- `GET /api/videos/{video_id}/timestamps`：讀取影片共用的 Ground Truth 秒數。
+- `PUT /api/videos/{video_id}/timestamps`，body `{"timestamps":[205,431]}`：
+  整批取代影片標註；傳空陣列可清空。時間點必須是非負、不重複整數，
+  且不能超過已知影片長度。
+
+名稱重複或同一影片重複加入同一 Dataset 時回傳 `409`；無效 URL、
+時間點或超過影片長度的標註回傳 `422`；找不到指定 Dataset 或影片時回傳
+`404`。移除影片關聯不會刪除影片或其 Ground Truth。
+
+### 4. 安裝並啟動
 
 ```powershell
 pip install -r requirements.txt
