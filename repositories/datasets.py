@@ -67,11 +67,26 @@ def add_video_to_dataset(
     dataset_id: int,
     youtube_id: str,
     url: str,
+    title: str,
+    duration_seconds: int | None,
 ) -> Video | None:
     db.execute(
         insert(Video)
-        .values(youtube_id=youtube_id, url=url)
-        .on_conflict_do_nothing(index_elements=[Video.youtube_id])
+        .values(
+            youtube_id=youtube_id,
+            url=url,
+            title=title,
+            duration_seconds=duration_seconds,
+        )
+        .on_conflict_do_update(
+            index_elements=[Video.youtube_id],
+            set_={
+                "url": url,
+                "title": title,
+                "duration_seconds": duration_seconds,
+                "updated_at": func.now(),
+            },
+        )
     )
     video = db.scalar(select(Video).where(Video.youtube_id == youtube_id))
     if video is None:
@@ -110,6 +125,22 @@ def remove_video_from_dataset(
 
 def get_video(db: Session, video_id: int) -> Video | None:
     return db.get(Video, video_id)
+
+
+def get_dataset_video(
+    db: Session,
+    dataset_id: int,
+    youtube_id: str,
+) -> Video | None:
+    statement = (
+        select(Video)
+        .join(Video.dataset_links)
+        .where(
+            DatasetVideo.dataset_id == dataset_id,
+            Video.youtube_id == youtube_id,
+        )
+    )
+    return db.scalar(statement)
 
 
 def get_video_timestamps(db: Session, video_id: int) -> list[int]:

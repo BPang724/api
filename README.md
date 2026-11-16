@@ -99,16 +99,19 @@ psql -d <database_name> -v ON_ERROR_STOP=1 -f psql/create_dataset_tables.sql
 - `DELETE /api/datasets/{dataset_id}`：刪除 Dataset 及其關聯，不刪除共用影片。
 - `POST /api/datasets/{dataset_id}/videos`，body
   `{"url":"https://www.youtube.com/watch?v=abcdefghijk"}`：將影片加入 Dataset；
-  相同影片會重用同一筆 Video。
+  後端會透過 `yt-dlp` 讀取標題與影片長度（不下載影片），相同影片會重用
+  同一筆 Video。
 - `DELETE /api/datasets/{dataset_id}/videos/{video_id}`：只移除這筆 Dataset 關聯。
 - `GET /api/videos/{video_id}/timestamps`：讀取影片共用的 Ground Truth 秒數。
 - `PUT /api/videos/{video_id}/timestamps`，body `{"timestamps":[205,431]}`：
   整批取代影片標註；傳空陣列可清空。時間點必須是非負、不重複整數，
   且不能超過已知影片長度。
 
-名稱重複或同一影片重複加入同一 Dataset 時回傳 `409`；無效 URL、
+名稱重複時回傳 `409`；同一影片重複加入同一 Dataset 時回傳既有影片資料
+及 `200`，讓重試或重複送出不會被誤報為失敗。無效 URL、
 時間點或超過影片長度的標註回傳 `422`；找不到指定 Dataset 或影片時回傳
-`404`。移除影片關聯不會刪除影片或其 Ground Truth。
+`404`。若 `yt-dlp` 無法取得影片資訊，加入影片會回傳 `422` 並說明原因；
+移除影片關聯不會刪除影片或其 Ground Truth。
 
 ### 4. 安裝並啟動
 

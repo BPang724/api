@@ -9,6 +9,7 @@ from core.db import get_db
 from core.security import get_experiment_member
 from models.dataset import Dataset, Video
 from repositories import datasets as dataset_repository
+from services.youtube import YouTubeMetadataError, extract_youtube_metadata
 from schemas.datasets import (
     DatasetCreate,
     DatasetDetail,
@@ -235,17 +236,41 @@ def add_video_to_dataset(
         )
 
     youtube_id = _youtube_video_id(video_data.url)
+    existing_video = dataset_repository.get_dataset_video(
+        db, dataset_id, youtube_id
+    )
+    if existing_video is not None:
+        response.status_code = status.HTTP_200_OK
+        return _dataset_video_response(existing_video)
+
+    canonical_url = f"https://www.youtube.com/watch?v={youtube_id}"
+    try:
+        metadata = extract_youtube_metadata(canonical_url)
+    except YouTubeMetadataError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
     video = dataset_repository.add_video_to_dataset(
         db,
         dataset_id,
         youtube_id,
-        f"https://www.youtube.com/watch?v={youtube_id}",
+        canonical_url,
+        metadata.title,
+        metadata.duration_seconds,
     )
     if video is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This video is already in the Dataset.",
+        existing_video = dataset_repository.get_dataset_video(
+            db, dataset_id, youtube_id
         )
+        if existing_video is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The video could not be added because the Dataset changed.",
+            )
+        response.status_code = status.HTTP_200_OK
+        return _dataset_video_response(existing_video)
 
     video = dataset_repository.get_video(db, video.id)
     if video is None:
